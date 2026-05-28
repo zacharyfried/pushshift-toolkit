@@ -1,178 +1,110 @@
-# Markdown
+# Pushshift Toolkit
 
----
+Utilities for importing archived Reddit/Pushshift datasets into MySQL for research workflows.
 
-**NOTE (2023)**:
+## Status
 
-**Pushshift’s public API and file hosting have changed significantly.**
+This repository is preserved as a portfolio and reference artifact. Pushshift's public API and historical file hosting have changed, so the scripts that downloaded fresh monthly dumps from `files.pushshift.io` are deprecated and should not be expected to work for new data.
 
-The scripts that directly download new monthly .zst files from [files.pushshift.io](https://files.pushshift.io/) are **deprecated** and will not work anymore. 
+The maintained part of this repo is the local importer:
 
-This repo has **two main sets of scripts**:
+- `import_local_reddit_data.py`: recursively scans a local directory for Reddit data files and imports recognized files into MySQL.
 
-1.	**Legacy Scripts** (deprecated):
+The legacy scripts are retained for reference:
 
-•	[download_pushshift_data.py](https://www.notion.so/src/pushshift/download_pushshift_data.py): Used to download .zst files from Pushshift for a given time range (API no longer public).
+- `src/pushshift/download_pushshift_data.py`: old downloader for monthly `.zst` files.
+- `src/pushshift/pushshift_download_and_insert.py`: old download/decompress/import pipeline.
 
-•	[pushshift_download_and_insert.py](https://www.notion.so/src/pushshift/pushshift_download_and_insert.py): Combined download + decompression + MySQL insertion from live Pushshift.
+## What It Demonstrates
 
-2.	**Current / Local Data Scripts** (still functional):
+- Recursive file discovery for large local data archives.
+- Handling multiple dump formats: `.sql`, `.sql.gz`, and Pushshift-style `.zst` JSON lines.
+- MySQL table creation and chunked inserts for large text datasets.
+- Idempotent processing through `.done` marker files.
+- Practical data-engineering work around research-scale Reddit datasets.
 
-•	[import_local_reddit_data.py](https://www.notion.so/import_local_reddit_data.py): Recursively scans a local directory of Reddit data files (.sql, .sql.gz, .zst), then **imports them into MySQL**.
+## Repository Structure
 
-•	**.sql / .sql.gz** are assumed to be raw SQL dumps.
-
-•	**.zst** files are assumed to be **Pushshift-style JSON** and will be parsed line-by-line before insertion.
-
----
-
-**Table of Contents**
-
-1.	[Repository Structure](https://www.notion.so/Markdown-9bf480aeb83f4c31b0abeed8f0cbc82a?pvs=21)
-
-2.	[Requirements](https://www.notion.so/Markdown-9bf480aeb83f4c31b0abeed8f0cbc82a?pvs=21)
-
-3.	[Usage (Local Import Script)](https://www.notion.so/Markdown-9bf480aeb83f4c31b0abeed8f0cbc82a?pvs=21)
-
-4.	[Legacy Scripts (Deprecated)](https://www.notion.so/Markdown-9bf480aeb83f4c31b0abeed8f0cbc82a?pvs=21)
-
-5.	[FAQ](https://www.notion.so/Markdown-9bf480aeb83f4c31b0abeed8f0cbc82a?pvs=21)
-
----
-
-**Repository Structure**
-
-A rough outline of key files:
-
-```
-pushshift-toolkit/
-├── README.md                  <- You are here
-├── import_local_reddit_data.py
-├── src/
-│   └── pushshift/
-│       ├── download_pushshift_data.py        (old, no longer functional)
-│       └── pushshift_download_and_insert.py  (old, no longer functional)
-└── ...
+```text
+.
+|-- import_local_reddit_data.py
+|-- src/
+|   `-- pushshift/
+|       |-- download_pushshift_data.py
+|       `-- pushshift_download_and_insert.py
+`-- README.md
 ```
 
-•	**import_local_reddit_data.py** – The main updated script that can import locally stored SQL and/or JSON zst dumps into MySQL.
+## Requirements
 
-•	**download_pushshift_data.py** and **pushshift_download_and_insert.py** – Original scripts for downloading from the now-changed Pushshift services. Retained here for reference/portfolio.
+- Python 3.7+
+- MySQL or MariaDB
+- `PyMySQL`
+- `zstd` CLI tool for `.zst`
+- `gzip`/`zcat` for `.sql.gz`
 
----
+Install Python dependency:
 
-**Requirements**
-
-•	**Python 3.7+** 
-
-•	**PyMySQL** 
-
-•	**zstd** CLI tool
-
-•	**gzip** or **zcat** for .gz
-
-•	**MySQL or MariaDB** server access (local or remote)
-
-•	**(Optional)** A ~/.my.cnf or --defaults-extra-file usage so you don’t expose password in CLI
-
----
-
-**Usage (Local Import Script)**
-
-**Overview**
-
-import_local_reddit_data.py searches a directory recursively for:
-
-1.	sub_YYYY_MM.sql or com_YYYY_MM.sql (plain .sql)
-
-2.	sub_YYYY_MM.sql.gz or com_YYYY_MM.sql.gz (gzipped .sql)
-
-3.	RS_YYYY-MM.zst or RC_YYYY-MM.zst (Pushshift JSON data)
-
-Then it imports them into your chosen MySQL/MariaDB database:
-
-•	**submissions** get inserted into tables named sub_YYYY_MM.
-
-•	**comments** get inserted into tables named com_YYYY_MM.
-
-**.sql** and **.sql.gz** are assumed to already have valid SQL (like CREATE TABLE... INSERT ...).
-
-**.zst** is assumed to be JSON lines from old Pushshift dumps, so the script does the chunk-by-chunk JSON parse.
-
-**Example Command**
-
+```bash
+python -m pip install pymysql
 ```
+
+For database credentials, prefer `~/.my.cnf` or another local credentials mechanism over passing passwords directly on the command line.
+
+## Local Import Usage
+
+`import_local_reddit_data.py` searches a directory recursively for:
+
+- `sub_YYYY_MM.sql` or `com_YYYY_MM.sql`
+- `sub_YYYY_MM.sql.gz` or `com_YYYY_MM.sql.gz`
+- `RS_YYYY-MM.zst` or `RC_YYYY-MM.zst`
+
+Then it imports recognized files into MySQL:
+
+- submissions go into tables named `sub_YYYY_MM`
+- comments go into tables named `com_YYYY_MM`
+
+Example:
+
+```bash
 python import_local_reddit_data.py \
     --data-dir /data/reddit_dumps \
     --db reddit \
     --host 127.0.0.1 \
     --user myuser \
-    --password mypass \
     --skip-done
 ```
 
-**Arguments**:
+Arguments:
 
-	`--data-dir /path/to/data`
+- `--data-dir`: top-level directory containing Reddit data files.
+- `--db`: MySQL database name.
+- `--host`: MySQL host, default `127.0.0.1`.
+- `--user`: MySQL user. Omit if relying on local MySQL config.
+- `--password`: MySQL password. Prefer omitting this and using `~/.my.cnf`.
+- `--skip-done`: skip files that already have a `.done` marker.
 
-Directory that holds your .sql, .sql.gz, and/or .zst files (recursively).
+## File Format Notes
 
-	`--db reddit`
+`.sql` and `.sql.gz` files are assumed to be valid SQL dumps that MySQL can execute directly.
 
-The MySQL database name you want to import into.
+`.zst` files are assumed to be Pushshift-style JSON lines. The importer parses them line by line and inserts a minimal normalized subset of fields:
 
-	`--user myuser / --password mypass`
+- `message_id`
+- `user_id`
+- `message`
+- `created_utc`
+- `subreddit`
 
-Credentials for MySQL (if not using .my.cnf).
+If your local dumps use a different schema, adjust `create_table_if_needed()` and the insert logic in `import_local_reddit_data.py`.
 
-	`--host 127.0.0.1`
+## Deprecated Scripts
 
-Database host (default = 127.0.0.1).
+The scripts under `src/pushshift/` target historical Pushshift hosting behavior and are kept as implementation references. They show date iteration, monthly file naming, decompression, chunked insertion, and error handling, but the original public endpoints are no longer reliable for new data collection.
 
-	`--skip-done`
+## Safety Notes
 
-If present, the script will skip any file that already has a .done marker (meaning it was successfully imported in a previous run).
-
-**Note**: You must have a running MySQL/MariaDB server, and your user must have privileges to CREATE TABLE and INSERT on the specified database.
-
----
-
-**Legacy Scripts (Deprecated)**
-
-**download_pushshift_data.py**
-
-**Status**: No longer functional for new data (Pushshift changed their open data hosting).
-
-**Purpose**: Originally used to download .zst monthly dumps from files.pushshift.io for a given date range.
-
-**pushshift_download_and_insert.py**
-
-**Status**: Also no longer functional for new data.
-
-**Purpose**: Combined the download step with immediate decompression and MySQL insertion.
-
-These scripts remain in the repository to showcase:
-
-•	**Examples** of date iteration, large file handling, chunked inserts, etc.
-
-•	**Your** development experience in building a pipeline for massive data ingestion.
-
-If you already have older .zst files downloaded from that era, you can still adapt or reference these scripts. Otherwise, they will not function because the original endpoints are gone.
-
----
-
-**FAQ**
-
-1.	**Q: Can I still get monthly Reddit dumps from Pushshift?**
-
-**A:** Unfortunately, as of 2023, Pushshift’s free data endpoints have been deprecated for general/academic use. Check their official channels or see if you already have existing .zst archives.
-
-2.	**Q: The script found a .zst but gave JSON parse errors.**
-
-**A:** Make sure it’s genuinely a **Pushshift JSON** .zst. If the file is actually an SQL dump in .zst form, you can decompress it separately and run mysql < file.sql.
-
-3.	**Q: Where are the table schemas for sub_YYYY_MM or com_YYYY_MM?**
-
-**A:** By default, import_local_reddit_data.py attempts to CREATE TABLE IF NOT EXISTS with minimal columns (message_id, user_id, message, created_utc, subreddit). If you have more fields or a template table, adjust the script to match your real schema.
-
----
+- Do not commit raw Reddit dumps, database exports, credentials, or failed-insert logs.
+- Large imports can create many tables and consume substantial disk space.
+- Test with a small month or sample directory before running against a large archive.
+- Review database schemas before importing data into an existing research database.

@@ -20,7 +20,7 @@ def download_data(start_year, start_month, end_year, end_month, download_type):
     comment_url = base_url + 'comments/RC_{year}-{month:02d}.zst'
 
     # Connect to the database
-    cnx = pymysql.connect(read_default_file='/home/zfried/.my.cnf', host='127.0.0.1', database='zfried')
+    cnx = pymysql.connect(read_default_file='~/.my.cnf', host='127.0.0.1', database='reddit')
     cursor = cnx.cursor()
 
     # Iterate over the years and months
@@ -43,7 +43,7 @@ def download_data(start_year, start_month, end_year, end_month, download_type):
 
             # Create table in MySQL database for this submission file
             table_name = "sub_{}_{:02d}".format(year, month)
-            create_table_query = "CREATE TABLE IF NOT EXISTS {} LIKE zfried.sub_template".format(table_name)
+            create_table_query = "CREATE TABLE IF NOT EXISTS {} LIKE sub_template".format(table_name)
             cursor.execute(create_table_query)
 
             # Disable keys in table
@@ -151,7 +151,7 @@ def download_data(start_year, start_month, end_year, end_month, download_type):
 
             # Create table in MySQL database for this comment file
             table_name = "com_{}_{:02d}".format(year, month)
-            create_table_query = "CREATE TABLE IF NOT EXISTS {} LIKE zfried.com_template".format(table_name)
+            create_table_query = "CREATE TABLE IF NOT EXISTS {} LIKE com_template".format(table_name)
             cursor.execute(create_table_query)
 
             # Disable keys in table
@@ -261,4 +261,3 @@ if __name__ == '__main__':
     parser.add_argument('download_type', choices=['both', 'submissions', 'comments'], help='The type of data to download (submissions, comments, or both)')
     args = parser.parse_args()
     download_data(args.start_year, args.start_month, args.end_year, args.end_month, args.download_type)
-
